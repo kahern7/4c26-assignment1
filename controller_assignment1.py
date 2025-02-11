@@ -14,25 +14,25 @@ log = core.getLogger()
 table={}
 
 rules=[# queues required for all dest hosts except h1 (h1 doesn't have queues)
-       {'priority':1000,'EthSrc':'00:00:00:00:00:01','EthDst':'00:00:00:00:00:03', 'TCPPort':40, 'queue':0, 'drop':False}, # cap at 30 Mb/s
-       {'priority':1000,'EthSrc':'00:00:00:00:00:01','EthDst':'00:00:00:00:00:02', 'TCPPort':60, 'queue':1, 'drop':False}, # cap at 150 Mb/s
+       {'priority':100,'EthSrc':'00:00:00:00:00:01','EthDst':'00:00:00:00:00:03', 'TCPPort':40, 'queue':0, 'drop':False}, # cap at 30 Mb/s
+       {'priority':100,'EthSrc':'00:00:00:00:00:01','EthDst':'00:00:00:00:00:02', 'TCPPort':60, 'queue':1, 'drop':False}, # cap at 150 Mb/s
        # => the first two example of rules have been added for you, you need now to add other rules to satisfy the assignment requirements. Notice that we will make decisions based on Ethernet address rather than IP address. Rate limiting is implemented by sending the pacet to the correct port and queue (the queues that you have specified in the topology file).
        
        # ARP rule inserted for all ports outside those specific above
-       {'priority':600,'EthSrc':'00:00:00:00:00:01','EthDst':'00:00:00:00:00:03', 'queue':0, 'drop':False}, # ARP uncapped
-       {'priority':600,'EthSrc':'00:00:00:00:00:01','EthDst':'00:00:00:00:00:02', 'queue':0, 'drop':False}, # ARP uncapped
+       {'priority':40,'EthSrc':'00:00:00:00:00:01','EthDst':'00:00:00:00:00:03', 'queue':0, 'drop':False}, # ARP uncapped
+       {'priority':40,'EthSrc':'00:00:00:00:00:01','EthDst':'00:00:00:00:00:02', 'queue':0, 'drop':False}, # ARP uncapped
 
-       {'priority':600,'EthSrc':'00:00:00:00:00:01','EthDst':'00:00:00:00:00:04', 'queue':0, 'drop':False}, # uncapped
-       {'priority':600,'EthSrc':'00:00:00:00:00:04','EthDst':'00:00:00:00:00:01', 'queue':None, 'drop':False}, # uncapped
+       {'priority':60,'EthSrc':'00:00:00:00:00:01','EthDst':'00:00:00:00:00:04', 'queue':0, 'drop':False}, # uncapped
+       {'priority':60,'EthSrc':'00:00:00:00:00:04','EthDst':'00:00:00:00:00:01', 'queue':None, 'drop':False}, # uncapped
 
-       {'priority':800,'EthSrc':'00:00:00:00:00:02','EthDst':'00:00:00:00:00:04', 'queue':1, 'drop':False}, # cap at 200 Mb/s
+       {'priority':80,'EthSrc':'00:00:00:00:00:02','EthDst':'00:00:00:00:00:04', 'queue':1, 'drop':False}, # cap at 200 Mb/s
 
-       {'priority':600,'EthSrc':'00:00:00:00:00:03','EthDst':'00:00:00:00:00:04', 'drop':True}, # blocked
-       {'priority':600,'EthSrc':'00:00:00:00:00:04','EthDst':'00:00:00:00:00:03', 'drop':True}, # blocked
+       {'priority':60,'EthSrc':'00:00:00:00:00:03','EthDst':'00:00:00:00:00:04', 'drop':True}, # blocked
+       {'priority':60,'EthSrc':'00:00:00:00:00:04','EthDst':'00:00:00:00:00:03', 'drop':True}, # blocked
 
-       {'priority':600,'EthSrc':'00:00:00:00:00:03','EthDst':'00:00:00:00:00:01', 'queue':None, 'drop':False}, # uncapped
-       {'priority':600,'EthSrc':'00:00:00:00:00:02','EthDst':'00:00:00:00:00:01', 'queue':None, 'drop':False}, # uncapped
-       {'priority':600,'EthSrc':'00:00:00:00:00:04','EthDst':'00:00:00:00:00:02', 'queue':0, 'drop':False}, # uncapped
+       {'priority':60,'EthSrc':'00:00:00:00:00:03','EthDst':'00:00:00:00:00:01', 'queue':None, 'drop':False}, # uncapped
+       {'priority':60,'EthSrc':'00:00:00:00:00:02','EthDst':'00:00:00:00:00:01', 'queue':None, 'drop':False}, # uncapped
+       {'priority':60,'EthSrc':'00:00:00:00:00:04','EthDst':'00:00:00:00:00:02', 'queue':0, 'drop':False}, # uncapped
         ]
 
 def launch ():
@@ -65,33 +65,34 @@ def _handle_PacketIn ( event): # Ths is the main class where your code goes, it 
     if dst_port is None and eth_packet.type == eth.ARP_TYPE and eth_packet.dst == EthAddr(b"\xff\xff\xff\xff\xff\xff"): # this identifies that the packet is an ARP broadcast
         # => in this case you want to create a packet so that you can send the message as a broadcast
         msg = of.ofp_packet_out(data = event.ofp)
+        msg.actions.append(of.ofp_action_output(port=of.OFPP_ALL))
         event.connection.send(msg)
 
     for rule in rules: #now you are adding rules to the flow tables like before. First you check whether there is a rule match based on Eth source and destination
-        if (eth_packet.dst==EthAddr(rule['EthDst']) and eth_packet.src==EthAddr(rule['EthSrc'])):
+        if eth_packet.dst==EthAddr(rule['EthDst']) and eth_packet.src==EthAddr(rule['EthSrc']):
             log.debug("Event: found rule from source %s to dest  %s" % (eth_packet.src, eth_packet.dst))
             # => start creating a new flow rule for matching the ethernet source and destination
             msg = of.ofp_flow_mod()
             msg.priority = rule['priority']
-            msg.match.dl_dst = rule['EthDst']
-            msg.match.dl_src = rule['EthSrc']
-            msg.hard_timeout = 400 # TODO: change back to 40 seconds for submission
+            msg.match.dl_dst = eth_packet.dst
+            msg.match.dl_src = eth_packet.src
+            msg.hard_timeout = 400 # TODO: change back to 40 for submission
             # soft timeout is not required for this exercise
             
-
-            if (eth_packet.payload.protocol != 'TCP_PROTOCOL'):
-                if (rule['drop']):
-                    continue
-                elif rule['queue' != None]:
-                    msg.actions.append(of.ofp_action_enqueue(port = of.OFPP_ALL))
+            # check if packet is ipv4 first before accessing protocol attribute
+            if not isinstance(eth_packet.payload, ip) or eth_packet.payload.protocol != ip.TCP_PROTOCOL:
+                if rule['drop'] is True:
+                    continue # packet is dropped by not adding action
+                elif rule['queue'] is not None:
+                    msg.actions.append(of.ofp_action_enqueue(port=dst_port, queue_id=rule['queue']))
                 else:
-                    msg.actions.append(of.ofp_action_output(port = of.OFPP_ALL))
+                    msg.actions.append(of.ofp_action_output(port = dst_port))
                 
                 event.connection.send(msg)
 
                 msg = of.ofp_packet_out()
                 msg.data = event.ofp
-                msg.actions.append(of.ofp_action_output(port = of.OFFP_ALL))
+                msg.actions.append(of.ofp_action_output(port=dst_port))
                 event.connection.send(msg)
 
             # => now check if the rule contains also TCP port info. If not install the flow without any port restriction
@@ -104,7 +105,18 @@ def _handle_PacketIn ( event): # Ths is the main class where your code goes, it 
             # => otherwise:
                 msg.match.dl_type = eth.IP_TYPE
                 msg.match.nw_proto = ip.TCP_PROTOCOL
-                msg.actions.append(of.ofp_action_output(port = rule['TCPPORT']))
+                if 'TCPPort' in rule:
+                    # match the destination TCP port
+                    msg.match.tp_dst = rule['TCPPort']
+
+                if rule['drop']:
+                    continue # packet is dropped by not adding action
+                elif rule['queue'] is not None:
+                    msg.actions.append(of.ofp_action_enqueue(port=dst_port, queue_id=rule['queue']))
+                else:
+                    msg.actions.append(of.ofp_action_output(port=dst_port))
+                
+                event.connection.send(msg)
 
             # => if the packet is an IP packet, its protocol is TCP, and the TCP port of the packet matches the TCP rule above
                 # => add additioinal matching fields to the flow rule you are creating: IP-protocol type, TCP_protocol_type, destination TCP port.
@@ -112,7 +124,10 @@ def _handle_PacketIn ( event): # Ths is the main class where your code goes, it 
                 # => also remember to check if this is a drop rule.
                 # => at the end remember to send out both flow rule and packet
 
-
+                msg = of.ofp_packet_out()
+                msg.data = event.ofp
+                msg.actions.append(of.ofp_action_output(port=dst_port))
+                event.connection.send(msg)
 
 
     ########### THIS IS THE END OF THE AREA WHERE YOU NEED TO ADD CODE ##################################

@@ -13,6 +13,7 @@ def assignmentTopo():
     ############ CODE SHOULD ONLY BE ADDED BELOW  #################################
     info( '*** Adding controller\n' )
     # =>add the controller here
+    net.addController('c0', controller=RemoteController)
 
     info( '*** Adding hosts\n' )
     h1 = net.addHost( 'h1', ip='10.0.0.1', mac='00:00:00:00:00:01' )
