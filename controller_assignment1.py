@@ -76,7 +76,7 @@ def _handle_PacketIn ( event): # Ths is the main class where your code goes, it 
             msg.priority = rule['priority']
             msg.match.dl_dst = eth_packet.dst
             msg.match.dl_src = eth_packet.src
-            msg.hard_timeout = 400 # TODO: change back to 40 for submission
+            msg.hard_timeout = 40
             # soft timeout is not required for this exercise
             
             # check if packet is ipv4 first before accessing protocol attribute
